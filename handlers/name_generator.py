@@ -45,7 +45,7 @@ async def ng_country(message: Message):
     )
 
 # 2) Gender
-@router.message(F.text.regexp(r"^(?i)(male|female|mixed)$"))
+@router.message(F.text.regexp(r"^(male|female|mixed)$", re.IGNORECASE))
 async def ng_gender(message: Message):
     uid = message.from_user.id
     if uid not in USER_STATE or "country" not in USER_STATE[uid]:
