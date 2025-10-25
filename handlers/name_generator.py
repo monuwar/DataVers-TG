@@ -70,6 +70,9 @@ async def ng_generate(message: Message):
     from aiogram.types import FSInputFile
 import time
 
+from aiogram.types import FSInputFile
+import time
+
 # 🧩 Output Fix: ≤200 in chat, >200 as file
 if count <= 200:
     text = f"🎉 Generated {count} {gender.lower()} names from {country}:\n\n" + "\n".join(names)
