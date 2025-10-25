@@ -21,7 +21,8 @@ COUNTRY_LOCALES = {
 
 # case-insensitive regex for country detection
 COUNTRY_PATTERN = re.compile(
-    r"^(?i)(norway|united states|bangladesh|india|germany|france|japan)$"
+    r"^(norway|united states|bangladesh|india|germany|france|japan)$",
+    re.IGNORECASE
 )
 
 @router.message(F.text == "👤 Name Generator")
