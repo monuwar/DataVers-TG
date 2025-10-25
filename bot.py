@@ -1,15 +1,15 @@
 import os
 import random
-from aiogram import Bot, Dispatcher, types
+import asyncio
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from aiogram.utils import executor
 
 # -------------------- BOT SETUP --------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher(bot)
+dp = Dispatcher()
 
 # -------------------- UI BUTTONS --------------------
 main_menu = InlineKeyboardMarkup(inline_keyboard=[
@@ -23,7 +23,7 @@ back_btn = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 # -------------------- COMMANDS --------------------
-@dp.message_handler(commands=['start'])
+@dp.message(F.text == "/start")
 async def start_cmd(message: types.Message):
     await message.answer(
         "👋 Welcome to <b>DataVers TG Bot</b>!\n\nChoose an option below 👇",
@@ -31,29 +31,29 @@ async def start_cmd(message: types.Message):
     )
 
 # -------------------- CALLBACKS --------------------
-@dp.callback_query_handler(lambda c: c.data == "back")
-async def go_back(callback_query: types.CallbackQuery):
-    await callback_query.message.edit_text(
+@dp.callback_query(F.data == "back")
+async def go_back(callback: types.CallbackQuery):
+    await callback.message.edit_text(
         "🏠 Main Menu:\nSelect a feature 👇",
         reply_markup=main_menu
     )
 
-@dp.callback_query_handler(lambda c: c.data == "about")
-async def about(callback_query: types.CallbackQuery):
-    await callback_query.message.edit_text(
+@dp.callback_query(F.data == "about")
+async def about(callback: types.CallbackQuery):
+    await callback.message.edit_text(
         "🤖 <b>DataVers TG Bot</b>\n\nDeveloped by Team DataVers.\n\n⚙️ Features:\n• Name Generator\n• Data Tools\n\nVersion: 1.0.0",
         reply_markup=back_btn
     )
 
 # -------------------- NAME GENERATOR --------------------
-@dp.callback_query_handler(lambda c: c.data == "namegen")
-async def name_generator(callback_query: types.CallbackQuery):
-    await callback_query.message.edit_text(
+@dp.callback_query(F.data == "namegen")
+async def name_generator(callback: types.CallbackQuery):
+    await callback.message.edit_text(
         "🧠 <b>Name Generator</b>\n\nSend me how many names you want (e.g. 50 or 500).",
         reply_markup=back_btn
     )
 
-@dp.message_handler(lambda message: message.text.isdigit())
+@dp.message(F.text.regexp(r'^\d+$'))
 async def generate_names(message: types.Message):
     count = int(message.text)
     names = [f"Name_{random.randint(1000,9999)}" for _ in range(count)]
@@ -68,15 +68,18 @@ async def generate_names(message: types.Message):
         await message.answer_document(open(filename, "rb"), caption=f"✅ Generated {count} names saved as file.")
         os.remove(filename)
 
-# -------------------- DATA TOOLS (PLACEHOLDER) --------------------
-@dp.callback_query_handler(lambda c: c.data == "tools")
-async def tools(callback_query: types.CallbackQuery):
-    await callback_query.message.edit_text(
+# -------------------- DATA TOOLS --------------------
+@dp.callback_query(F.data == "tools")
+async def tools(callback: types.CallbackQuery):
+    await callback.message.edit_text(
         "📊 <b>Data Tools Section</b>\n\nComing soon...",
         reply_markup=back_btn
     )
 
-# -------------------- MAIN --------------------
-if __name__ == "__main__":
+# -------------------- RUN BOT --------------------
+async def main():
     print("🚀 DataVers TG Bot is running...")
-    executor.start_polling(dp, skip_updates=True)
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
