@@ -51,7 +51,7 @@ async def generate_names(message: types.Message):
     names = [f"Name_{random.randint(1000,9999)}" for _ in range(count)]
 
     if count <= 200:
-        await message.answer(f"✅ Generated {count} names:\n\n<code>{'\n'.join(names)}</code>")
+        await message.answer("✅ Generated {} names:\n\n<code>{}</code>".format(count, "\n".join(names)))
     else:
         filename = "generated_names.txt"
         with open(filename, "w", encoding="utf-8") as f:
