@@ -15,15 +15,9 @@ COUNTRY_LOCALES = {
     "Japan": "ja_JP"
 }
 
-@router.message()
-async def ask_gender(message: Message):
-    country = message.text.strip().title()
-    if country in COUNTRY_LOCALES:
-        message.bot['user_country'] = country
-        await message.answer(
-            f"✅ Country selected: {country}\n\nPlease select gender:\n"
-            "- Male\n- Female\n- Mixed"
-        )
+# Start command for name generator
+@router.message(F.text == "👤 Name Generator")
+async def ask_country(message: Message):
     text = (
         "🌍 **Name Generator Activated!**\n"
         "Choose a country:\n\n"
@@ -31,20 +25,25 @@ async def ask_gender(message: Message):
     )
     await message.answer(text, parse_mode="Markdown")
 
-@router.message(F.text.in_(COUNTRY_LOCALES.keys()))
+# Detect country (case-insensitive)
+@router.message(lambda msg: msg.text and msg.text.strip().title() in COUNTRY_LOCALES)
 async def ask_gender(message: Message):
-    message.bot['user_country'] = message.text
+    country = message.text.strip().title()
+    message.bot['user_country'] = country
     await message.answer(
-        f"✅ Country selected: {message.text}\n\nPlease select gender:\n"
+        f"✅ Country selected: {country}\n\nPlease select gender:\n"
         "- Male\n- Female\n- Mixed"
     )
 
-@router.message(F.text.in_(["Male", "Female", "Mixed"]))
+# Detect gender
+@router.message(lambda msg: msg.text and msg.text.strip().capitalize() in ["Male", "Female", "Mixed"])
 async def ask_count(message: Message):
-    message.bot['user_gender'] = message.text
+    gender = message.text.strip().capitalize()
+    message.bot['user_gender'] = gender
     await message.answer("📊 How many names do you want to generate? (e.g., 10, 50, 100)")
 
-@router.message(F.text.regexp(r"^\d+$"))
+# Generate names
+@router.message(lambda msg: msg.text and msg.text.isdigit())
 async def generate_names(message: Message):
     try:
         count = int(message.text)
