@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, FSInputFile
 from faker import Faker
 import time
 import re
@@ -23,7 +23,9 @@ COUNTRY_LOCALES = {
 # Regex for detecting country
 COUNTRY_PATTERN = re.compile(r"(?i)^(norway|united states|bangladesh|india|germany|france|japan)$")
 
-@router.message(F.text == "👤 Name Generator")
+
+# 🧩 Step 1: Activate command
+@router.message(F.text == "🧠 Name Generator")
 async def ng_start(message: Message):
     text = (
         "🌍 **Name Generator Activated!**\n\n"
@@ -33,7 +35,8 @@ async def ng_start(message: Message):
     USER_STATE.pop(message.from_user.id, None)
     await message.answer(text, parse_mode="Markdown")
 
-# Step 1: Country select
+
+# 🗺️ Step 2: Select country
 @router.message(F.text.regexp(COUNTRY_PATTERN))
 async def ng_country(message: Message):
     country = message.text.strip().title()
@@ -42,17 +45,20 @@ async def ng_country(message: Message):
         f"✅ Country selected: {country}\n\nPlease type gender:\n- Male\n- Female\n- Mixed"
     )
 
-# Step 2: Gender select
+
+# 🚻 Step 3: Select gender
 @router.message(F.text.regexp(r"(?i)^(male|female|mixed)$"))
 async def ng_gender(message: Message):
     uid = message.from_user.id
     if uid not in USER_STATE or "country" not in USER_STATE[uid]:
         return
+
     gender = message.text.strip().capitalize()
     USER_STATE[uid]["gender"] = gender
     await message.answer("📊 How many names do you want? (e.g., 10, 50, 100; max 5000)")
 
-# Step 3: Name count and generate
+
+# 🏗️ Step 4: Generate names
 @router.message(F.text.regexp(r"^\d+$"))
 async def ng_generate(message: Message):
     uid = message.from_user.id
@@ -67,10 +73,16 @@ async def ng_generate(message: Message):
     gender = USER_STATE[uid]["gender"]
     fake = Faker(COUNTRY_LOCALES.get(country, "en_US"))
 
-    from aiogram.types import FSInputFile
-import time
+    names = []
+    for _ in range(count):
+        if gender == "Male":
+            names.append(f"{fake.first_name_male()} {fake.last_name()}")
+        elif gender == "Female":
+            names.append(f"{fake.first_name_female()} {fake.last_name()}")
+        else:
+            names.append(fake.name())
 
-# ✅ Output Fix: ≤200 in chat, ≥201 as file
+    # ✅ Output Fix: ≤200 in chat, ≥201 as file
     if count <= 200:
         text = f"🎉 Generated {count} {gender.lower()} names from {country}:\n\n" + "\n".join(names)
         await message.answer(text)
@@ -91,4 +103,5 @@ import time
         except Exception as e:
             await message.answer(f"⚠️ File sending failed:\n{e}")
 
-        USER_STATE.pop(uid, None)
+    # 🧹 Clear session
+    USER_STATE.pop(uid, None)
