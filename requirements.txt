@@ -4,3 +4,4 @@ pandas==2.2.2
 openpyxl==3.1.2
 python-dotenv==1.0.1
 Faker==25.2.0
+unicodedata2==15.1.0
