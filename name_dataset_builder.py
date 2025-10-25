@@ -3,8 +3,7 @@ import random
 from faker import Faker
 
 # 🌎 Supported locales from Faker
-SUPPORTED_LOCALES = Faker.locales
-
+SUPPORTED_LOCALES = list(Faker().locales)
 # 🌍 Locale fallback mapping for missing or alias countries
 locale_fallbacks = {
     "bangladesh": "en_IN",
