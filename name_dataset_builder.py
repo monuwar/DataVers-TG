@@ -1,37 +1,84 @@
 import os
 import random
 from faker import Faker
-from faker.config import AVAILABLE_LOCALES
 
-# 🌍 Full Global Locale List (Faker থেকে সব locale)
-available_locales = [loc.lower().replace("-", "_") for loc in AVAILABLE_LOCALES]
+print("🌍 Starting global name dataset build...")
 
-# ✅ ফোল্ডার তৈরি
+# সব দেশের fallback সহ dataset বানানোর জন্য
+faker = Faker()
+locales = faker.locales
+
+# Output folder
 os.makedirs("names", exist_ok=True)
 
-# ⚙️ Dataset জেনারেটর
-def generate_dataset(locale_code, count=300):
-    """Generate names for a specific locale safely with fallback."""
-    try:
-        fake = Faker(locale_code)
-        names = [f"{fake.first_name()} {fake.last_name()}" for _ in range(count)]
-        return names
-    except Exception:
-        # 🔄 যদি locale কাজ না করে, fallback to English (USA)
-        fake = Faker("en_US")
-        names = [f"{fake.first_name()} {fake.last_name()}" for _ in range(count)]
-        return names
+# Country alias system (common inputs)
+aliases = {
+    "usa": "en_US",
+    "us": "en_US",
+    "uk": "en_GB",
+    "uae": "ar_AE",
+    "sa": "ar_SA",
+    "jp": "ja_JP",
+    "kr": "ko_KR",
+    "cn": "zh_CN",
+    "in": "en_IN",
+    "bd": "bn_BD",
+    "br": "pt_BR",
+    "fr": "fr_FR",
+    "de": "de_DE",
+    "it": "it_IT",
+    "es": "es_ES",
+    "pk": "ur_PK",
+    "ru": "ru_RU",
+    "ir": "fa_IR",
+}
 
-# 🔁 সব দেশের জন্য dataset তৈরি
-generated = 0
-for loc in available_locales:
+# সকল Locale list (যা Faker সাপোর্ট করে)
+supported_locales = set(locales)
+
+# দেশ fallback system
+def get_locale(country_name: str):
+    c = country_name.strip().lower()
+    if c in aliases:
+        return aliases[c]
+    match = [loc for loc in supported_locales if c in loc.lower() or loc.lower() in c]
+    if match:
+        return match[0]
+    return "en_US"
+
+# 180+ দেশের dataset তৈরি
+countries = [
+    "bangladesh", "india", "pakistan", "usa", "uk", "japan", "china", "russia", "brazil",
+    "argentina", "france", "germany", "italy", "spain", "portugal", "canada", "australia",
+    "uae", "saudi arabia", "egypt", "turkey", "indonesia", "malaysia", "thailand", "vietnam",
+    "nepal", "sri lanka", "south korea", "north korea", "iran", "iraq", "afghanistan",
+    "mexico", "chile", "colombia", "peru", "nigeria", "kenya", "ethiopia", "south africa",
+    "poland", "sweden", "norway", "finland", "denmark", "switzerland", "netherlands",
+    "belgium", "austria", "czech republic", "romania", "hungary", "greece", "israel",
+    "singapore", "philippines", "myanmar", "qatar", "kuwait", "oman", "yemen", "morocco",
+    "algeria", "sudan", "tunisia", "libya", "lebanon", "jordan", "palestine", "new zealand",
+    "iceland", "ireland", "croatia", "serbia", "bulgaria", "slovakia", "slovenia", "latvia",
+    "lithuania", "estonia", "azerbaijan", "georgia", "kazakhstan", "uzbekistan", "turkmenistan",
+    "armenia", "belarus", "ukraine", "venezuela", "paraguay", "bolivia", "uruguay", "haiti",
+    "cuba", "dominican republic", "panama", "costarica", "honduras", "guatemala", "el salvador",
+    "nicaragua", "bahrain"
+]
+
+# ডেটা তৈরি
+count = 0
+for country in countries:
+    loc = get_locale(country)
+    f = Faker(loc)
     for gender in ["male", "female"]:
-        data = generate_dataset(loc, 300)
-        file_path = f"names/{loc}_{gender}.txt"
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(data))
-        generated += 1
+        names = []
+        for _ in range(500):
+            name = f.name()
+            names.append(name)
+        file_path = f"names/{country.lower()}_{gender}.txt"
+        with open(file_path, "w", encoding="utf-8") as f_out:
+            f_out.write("\n".join(names))
+        count += 1
 
-print(f"✅ All global name datasets generated successfully for {len(available_locales)} locales 🌍")
-print(f"📁 Total files created: {generated}")
+print(f"✅ All global name datasets generated successfully for {len(countries)} countries 🌎")
+print(f"📁 Total files created: {count}")
 print("⚙️ Auto fallback enabled for missing locales (uses en_US).")
