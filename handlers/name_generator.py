@@ -92,5 +92,3 @@ else:
         await message.answer(f"⚠️ File sending failed:\n{e}")
 
     USER_STATE.pop(uid, None)  # ✅ এখন এটা ঠিক জায়গায় আছে (ইনডেন্টেড)
-
-    USER_STATE.pop(uid, None)  # ✅ Must stay inside function (indented 4 spaces)
