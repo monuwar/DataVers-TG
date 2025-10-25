@@ -78,6 +78,8 @@ async def ng_generate(message: Message):
 
     from aiogram.types import FSInputFile
 
+from aiogram.types import FSInputFile
+
 # 🧩 Output Fix: ≤200 in chat, >200 as file
 if count <= 200:
     text = f"🎉 Generated {count} {gender.lower()} names from {country}:\n\n" + "\n".join(names)
@@ -97,4 +99,4 @@ else:
     except Exception as e:
         await message.answer(f"⚠️ File sending failed:\n{e}")
 
-    USER_STATE.pop(uid, None)
+USER_STATE.pop(uid, None)
