@@ -57,9 +57,6 @@ async def easy_copy(message: Message):
 async def email_gen(message: Message):
     await message.answer("📧 Email Generator — coming soon!")
 
-@dp.message(F.text == "👤 Name Generator")
-async def name_gen(message: Message):
-    await message.answer("👤 Name Generator — coming soon!")
 
 @dp.message(F.text == "🌍 Fake Data")
 async def fake_data(message: Message):
