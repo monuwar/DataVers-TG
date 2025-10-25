@@ -2,6 +2,7 @@ import os
 import random
 import asyncio
 import logging
+from typing import List
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode
@@ -9,10 +10,8 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import CommandStart
 
-# ------------ Logging ------------
 logging.basicConfig(level=logging.INFO)
 
-# ------------ BOT SETUP ------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN environment variable missing!")
@@ -20,7 +19,12 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# ------------ REPLY KEYBOARD (Main Menu) ------------
+# ---------------- UI (Reply Keyboard - unchanged) ----------------
+MENU_BTNS = [
+    "🧠 Name Generator", "📧 Email Generator",
+    "🔢 OTP Mode", "🧩 Fake Data",
+    "➕ Plus Add", "🏠 Main Menu"
+]
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="🧠 Name Generator"), KeyboardButton(text="📧 Email Generator")],
@@ -30,139 +34,161 @@ main_menu = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# ------------ MEMORY (to store user steps) ------------
-user_context = {}
+GENDER_MENU = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Male"), KeyboardButton(text="Female")],
+        [KeyboardButton(text="Mixed"), KeyboardButton(text="🏠 Main Menu")]
+    ],
+    resize_keyboard=True
+)
 
-# ------------ HELPERS ------------
-def load_names(country: str, gender: str):
-    """Load names from text file"""
-    path = f"names/{country.lower()}_{gender.lower()}.txt"
-    if not os.path.exists(path):
+# --------------- Simple in-memory context ---------------
+CTX = {}  # {user_id: {"step": "country|gender|count", "country": str, "gender": str}}
+
+def reset_ctx(uid: int):
+    CTX.pop(uid, None)
+
+# --------------- Files Loader (flexible) ---------------
+NAMES_DIR = "names"
+
+def read_lines(path: str) -> List[str]:
+    if not os.path.exists(path): 
         return []
     with open(path, "r", encoding="utf-8") as f:
-        lines = [line.strip() for line in f if line.strip()]
-    return lines
+        return [ln.strip() for ln in f if ln.strip()]
 
-def combine_names(first_list, last_list, count):
-    """Create random first+last combinations"""
-    result = []
-    for _ in range(count):
-        first = random.choice(first_list)
-        last = random.choice(last_list)
-        result.append(f"{first} {last}")
-    return result
+def load_first_last(country: str, gender: str):
+    """Try multiple naming schemes. Return (first_list, last_list)."""
+    c = country.lower()
+    g = gender.lower()
 
-# ------------ COMMAND / START ------------
+    # 1) names/{country}_{gender}_first.txt + names/{country}_{gender}_last.txt
+    first = read_lines(os.path.join(NAMES_DIR, f"{c}_{g}_first.txt"))
+    last  = read_lines(os.path.join(NAMES_DIR, f"{c}_{g}_last.txt"))
+    if first and last: return first, last
+
+    # 2) names/{country}_{gender}.txt (first) + names/{country}_surnames.txt (last)
+    first = read_lines(os.path.join(NAMES_DIR, f"{c}_{g}.txt"))
+    last  = read_lines(os.path.join(NAMES_DIR, f"{c}_surnames.txt"))
+    if first and last: return first, last
+
+    # 3) names/{country}_first.txt + names/{country}_last.txt
+    first = read_lines(os.path.join(NAMES_DIR, f"{c}_first.txt"))
+    last  = read_lines(os.path.join(NAMES_DIR, f"{c}_last.txt"))
+    if first and last: return first, last
+
+    # 4) Fallback: names/{country}_{gender}.txt for both (not ideal but works)
+    both = read_lines(os.path.join(NAMES_DIR, f"{c}_{g}.txt"))
+    if len(both) >= 2: return both, both
+
+    # 5) Final fallback: names/{country}.txt for both
+    both = read_lines(os.path.join(NAMES_DIR, f"{c}.txt"))
+    if len(both) >= 2: return both, both
+
+    return [], []
+
+def combo(first_list: List[str], last_list: List[str], n: int) -> List[str]:
+    res = []
+    for _ in range(n):
+        res.append(f"{random.choice(first_list)} {random.choice(last_list)}")
+    return res
+
+# ----------------- START -----------------
 @dp.message(CommandStart())
-async def start_cmd(message: types.Message):
-    await message.answer(
-        "👋 Welcome to <b>DataVers TG Bot!</b>\n\nChoose an option below 👇",
-        reply_markup=main_menu
-    )
+async def start_cmd(m: types.Message):
+    reset_ctx(m.from_user.id)
+    await m.answer("👋 Welcome to <b>DataVers TG Bot</b>!\n\nChoose an option below 👇", reply_markup=main_menu)
 
-# ------------ NAME GENERATOR ENTRY ------------
+# ----------------- HIGH-PRIORITY MAIN BUTTONS (always reset) -----------------
+@dp.message(F.text.in_(btn for btn in MENU_BTNS if btn != "🧠 Name Generator"))
+async def other_main_buttons(m: types.Message):
+    # pressing any other main button cancels flows safely
+    reset_ctx(m.from_user.id)
+    await m.answer("⚙️ This feature is coming soon... stay tuned!" if m.text != "🏠 Main Menu"
+                   else "🏠 Main Menu:\nSelect an option 👇", reply_markup=main_menu)
+
+# ----------------- NAME GENERATOR FLOW -----------------
 @dp.message(F.text == "🧠 Name Generator")
-async def ask_country(message: types.Message):
-    await message.answer("🌍 Type a country name (e.g. Bangladesh, India, Japan, USA)")
-    user_context[message.from_user.id] = {"step": "country"}
+async def namegen_start(m: types.Message):
+    reset_ctx(m.from_user.id)
+    CTX[m.from_user.id] = {"step": "country"}
+    await m.answer("🌍 Type a country name (e.g. Bangladesh, India, Japan, USA)")
 
-# ------------ HANDLE COUNTRY NAME ------------
-@dp.message(lambda msg: user_context.get(msg.from_user.id, {}).get("step") == "country")
-async def handle_country(message: types.Message):
-    country = message.text.strip().lower()
-    user_context[message.from_user.id] = {"country": country, "step": "gender"}
+@dp.message(lambda msg: CTX.get(msg.from_user.id, {}).get("step") == "country")
+async def step_country(m: types.Message):
+    country = m.text.strip()
+    if country in MENU_BTNS:
+        # safeguard — if user taps menu, main handler already caught, but keep safe
+        reset_ctx(m.from_user.id)
+        return
+    CTX[m.from_user.id] = {"step": "gender", "country": country}
+    await m.answer(f"✅ Country selected: {country.title()}\n\nPlease select a gender:", reply_markup=GENDER_MENU)
 
-    await message.answer(
-        f"✅ Country selected: {country.title()}\n\nPlease select a gender:",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="Male"), KeyboardButton(text="Female")],
-                [KeyboardButton(text="Mixed"), KeyboardButton(text="🏠 Main Menu")]
-            ],
-            resize_keyboard=True
-        )
-    )
-
-# ------------ HANDLE GENDER ------------
-@dp.message(lambda msg: user_context.get(msg.from_user.id, {}).get("step") == "gender")
-async def handle_gender(message: types.Message):
-    gender = message.text.strip().lower()
-    if gender not in ["male", "female", "mixed"]:
-        await message.answer("❌ Invalid input. Please choose: Male / Female / Mixed")
+@dp.message(lambda msg: CTX.get(msg.from_user.id, {}).get("step") == "gender")
+async def step_gender(m: types.Message):
+    g = m.text.strip().lower()
+    if g not in ["male", "female", "mixed"]:
+        if m.text in MENU_BTNS:
+            reset_ctx(m.from_user.id)  # main menu buttons will be handled by top handler next time
+            return
+        await m.answer("❌ Please choose: Male / Female / Mixed", reply_markup=GENDER_MENU)
         return
 
-    user_context[message.from_user.id]["gender"] = gender
-    user_context[message.from_user.id]["step"] = "count"
-
-    await message.answer(
-        f"✅ Gender selected: {gender.title()}\n\n📊 How many names do you want?\n"
-        "💡 Suggested: 10–50\n📈 Maximum: 5000\n\nPlease enter a number:"
+    CTX[m.from_user.id]["gender"] = g
+    CTX[m.from_user.id]["step"] = "count"
+    await m.answer(
+        f"✅ Gender selected: {g.title()}\n\n📊 How many names do you want?\n💡 Suggested: 10–50\n📈 Maximum: 5000\n\nPlease enter a number:"
     )
 
-# ------------ HANDLE COUNT & GENERATE ------------
-@dp.message(lambda msg: user_context.get(msg.from_user.id, {}).get("step") == "count")
-async def handle_count(message: types.Message):
-    uid = message.from_user.id
-    if not message.text.isdigit():
-        await message.answer("❌ Please enter a valid number.")
+@dp.message(lambda msg: CTX.get(msg.from_user.id, {}).get("step") == "count")
+async def step_count(m: types.Message):
+    uid = m.from_user.id
+    if not m.text.isdigit():
+        # If user presses any main button during count, cancel flow gracefully
+        if m.text in MENU_BTNS:
+            reset_ctx(uid)
+            await m.answer("🏠 Main Menu:\nSelect an option 👇", reply_markup=main_menu)
+            return
+        await m.answer("❌ Please enter a valid number.")
         return
 
-    count = int(message.text)
+    count = int(m.text)
     if count < 1 or count > 5000:
-        await message.answer("❌ Enter between 1 and 5000.")
+        await m.answer("❌ Enter between 1 and 5000.")
         return
 
-    country = user_context[uid]["country"]
-    gender = user_context[uid]["gender"]
+    country = CTX[uid]["country"]
+    gender  = CTX[uid]["gender"]
 
-    # Determine which files to load
-    if gender == "mixed":
-        male_names = load_names(country, "male")
-        female_names = load_names(country, "female")
-        all_first = male_names + female_names
-        all_last = male_names + female_names
-    elif gender == "male":
-        all_first = load_names(country, "male")
-        all_last = load_names(country, "male")
-    else:
-        all_first = load_names(country, "female")
-        all_last = load_names(country, "female")
-
-    if not all_first or not all_last:
-        await message.answer(f"❌ No name data found for {country.title()} ({gender}).")
+    first_list, last_list = load_first_last(country, gender)
+    if not first_list or not last_list:
+        reset_ctx(uid)
+        await m.answer(f"❌ No name data found for {country.title()} ({gender}).\n"
+                       f"📁 Expected files under <code>{NAMES_DIR}/</code> (any one scheme):\n"
+                       f"• <code>{country.lower()}_{gender}_first.txt</code> + <code>{country.lower()}_{gender}_last.txt</code>\n"
+                       f"• <code>{country.lower()}_{gender}.txt</code> + <code>{country.lower()}_surnames.txt</code>\n"
+                       f"• <code>{country.lower()}_first.txt</code> + <code>{country.lower()}_last.txt</code>",
+                       reply_markup=main_menu)
         return
 
-    generated = combine_names(all_first, all_last, count)
+    names = combo(first_list, last_list, count)
 
     if count <= 200:
-        await message.answer(
+        await m.answer(
             f"🎉 SUCCESS!\n✅ Generated {count} {gender.title()} names from {country.title()}:\n\n<code>"
-            + "\n".join(generated)
-            + "</code>"
+            + "\n".join(names) + "</code>"
         )
     else:
-        filename = f"{country}_{gender}_names.txt"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write("\n".join(generated))
-        await message.answer_document(
-            open(filename, "rb"),
-            caption=f"✅ Generated {count} {gender.title()} names from {country.title()} saved as file."
-        )
-        os.remove(filename)
+        fname = f"{country.lower()}_{gender}_names.txt"
+        with open(fname, "w", encoding="utf-8") as f:
+            f.write("\n".join(names))
+        await m.answer_document(open(fname, "rb"),
+                                caption=f"✅ Generated {count} {gender.title()} names from {country.title()} saved as file.")
+        os.remove(fname)
 
-    user_context.pop(uid, None)  # clear user context
+    reset_ctx(uid)
 
-# ------------ OTHER BUTTONS ------------
-@dp.message(F.text.in_(["📧 Email Generator", "🔢 OTP Mode", "🧩 Fake Data", "➕ Plus Add"]))
-async def coming_soon(message: types.Message):
-    await message.answer("⚙️ This feature is coming soon... stay tuned!")
-
-@dp.message(F.text == "🏠 Main Menu")
-async def go_home(message: types.Message):
-    await message.answer("🏠 Main Menu:\nSelect an option 👇", reply_markup=main_menu)
-    user_context.pop(message.from_user.id, None)
-
-# ------------ RUN ------------
+# ----------------- RUN -----------------
 async def main():
     print("🚀 DataVers TG Bot is running...")
     await bot.delete_webhook(drop_pending_updates=True)
