@@ -15,8 +15,15 @@ COUNTRY_LOCALES = {
     "Japan": "ja_JP"
 }
 
-@router.message(F.text == "👤 Name Generator")
-async def ask_country(message: Message):
+@router.message()
+async def ask_gender(message: Message):
+    country = message.text.strip().title()
+    if country in COUNTRY_LOCALES:
+        message.bot['user_country'] = country
+        await message.answer(
+            f"✅ Country selected: {country}\n\nPlease select gender:\n"
+            "- Male\n- Female\n- Mixed"
+        )
     text = (
         "🌍 **Name Generator Activated!**\n"
         "Choose a country:\n\n"
