@@ -10,7 +10,7 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import CommandStart
-
+fake_sessions = {}  # { user_id: {"step": "country" | "gender", "country": ""} }
 # ------------ Logging ------------
 logging.basicConfig(level=logging.INFO)
 
@@ -75,6 +75,24 @@ async def start_cmd(message: types.Message):
 async def other_features(message: types.Message):
     reset_state(message.from_user.id)
     await message.answer("⚙️ This feature is coming soon... stay tuned!")
+    
+@dp.message_handler(lambda m: m.text == "🧩 Fake Data")
+async def fake_data_start(message: types.Message):
+    uid = message.from_user.id
+    fake_sessions[uid] = {"step": "country", "country": ""}
+    await message.answer("🌍 Please type a country name (e.g. Bangladesh, Japan, USA)")
+
+@dp.message_handler(lambda m: m.from_user.id in fake_sessions and fake_sessions[m.from_user.id]["step"] == "country")
+async def fake_data_country(message: types.Message):
+    uid = message.from_user.id
+    country = message.text.strip()
+    fake_sessions[uid]["country"] = country
+    fake_sessions[uid]["step"] = "gender"
+
+    await message.answer(
+        f"✅ Country selected: {country.title()}\n\nPlease select a gender:",
+        reply_markup=gender_menu
+    )
 
 @dp.message(F.text == "🏠 Main Menu")
 async def main_menu_back(message: types.Message):
