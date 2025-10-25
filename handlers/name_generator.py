@@ -13,30 +13,30 @@ USER_STATE = {}
 COUNTRY_LOCALES = {
     "Norway": "no_NO",
     "United States": "en_US",
-    "Bangladesh": "en_US",  # later: custom dataset
+    "Bangladesh": "en_US",  # later we’ll add real BD dataset
     "India": "en_IN",
     "Germany": "de_DE",
     "France": "fr_FR",
     "Japan": "ja_JP"
 }
 
-# Regex for detecting country
-COUNTRY_PATTERN = re.compile(r"(?i)^(norway|united states|bangladesh|india|germany|france|japan)$")
+# Regex for detecting country names (case-insensitive)
+COUNTRY_PATTERN = re.compile(
+    r"(?i)^(norway|united states|bangladesh|india|germany|france|japan)$"
+)
 
-
-# 🧩 Step 1: Activate command
+# 🧩 Step 1: Start command for Name Generator
 @router.message(F.text == "🧠 Name Generator")
 async def ng_start(message: Message):
     text = (
         "🌍 **Name Generator Activated!**\n\n"
-        "Choose a country (type one):\n"
+        "Please type a country name (from list below):\n\n"
         "Norway, United States, Bangladesh, India, Germany, France, Japan"
     )
-    USER_STATE.pop(message.from_user.id, None)
+    USER_STATE.pop(message.from_user.id, None)  # reset user session
     await message.answer(text, parse_mode="Markdown")
 
-
-# 🗺️ Step 2: Select country
+# 🌍 Step 2: Country selection
 @router.message(F.text.regexp(COUNTRY_PATTERN))
 async def ng_country(message: Message):
     country = message.text.strip().title()
@@ -45,8 +45,7 @@ async def ng_country(message: Message):
         f"✅ Country selected: {country}\n\nPlease type gender:\n- Male\n- Female\n- Mixed"
     )
 
-
-# 🚻 Step 3: Select gender
+# 🚻 Step 3: Gender selection
 @router.message(F.text.regexp(r"(?i)^(male|female|mixed)$"))
 async def ng_gender(message: Message):
     uid = message.from_user.id
@@ -56,7 +55,6 @@ async def ng_gender(message: Message):
     gender = message.text.strip().capitalize()
     USER_STATE[uid]["gender"] = gender
     await message.answer("📊 How many names do you want? (e.g., 10, 50, 100; max 5000)")
-
 
 # 🏗️ Step 4: Generate names
 @router.message(F.text.regexp(r"^\d+$"))
@@ -99,7 +97,6 @@ async def ng_generate(message: Message):
                 document=document,
                 caption=f"✅ Generated {count} {gender.lower()} names from {country}\n📄 File ready for download!"
             )
-
         except Exception as e:
             await message.answer(f"⚠️ File sending failed:\n{e}")
 
