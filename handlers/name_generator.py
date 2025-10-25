@@ -67,18 +67,8 @@ async def ng_generate(message: Message):
     gender = USER_STATE[uid]["gender"]
     fake = Faker(COUNTRY_LOCALES.get(country, "en_US"))
 
-    names = []
-    for _ in range(count):
-        if gender == "Male":
-            names.append(f"{fake.first_name_male()} {fake.last_name()}")
-        elif gender == "Female":
-            names.append(f"{fake.first_name_female()} {fake.last_name()}")
-        else:
-            names.append(fake.name())
-
     from aiogram.types import FSInputFile
-
-from aiogram.types import FSInputFile
+import time
 
 # 🧩 Output Fix: ≤200 in chat, >200 as file
 if count <= 200:
