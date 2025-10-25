@@ -71,7 +71,7 @@ async def start_cmd(message: types.Message):
     )
 
 # ------------ MAIN BUTTONS (placeholders except Name Generator) ------------
-@dp.message(F.text.in_(["📧 Email Generator", "🔢 OTP Mode", "🧩 Fake Data", "➕ Plus Add"]))
+@dp.message(F.text.in_(["📧 Email Generator", "🔢 OTP Mode", "➕ Plus Add"]))
 async def other_features(message: types.Message):
     reset_state(message.from_user.id)
     await message.answer("⚙️ This feature is coming soon... stay tuned!")
