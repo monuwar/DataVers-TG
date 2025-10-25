@@ -94,6 +94,193 @@ async def fake_data_country(message: types.Message):
         reply_markup=gender_menu
     )
 
+@dp.message_handler(lambda m: m.from_user.id in fake_sessions and fake_sessions[m.from_user.id]["step"] == "gender")
+async def fake_data_gender(message: types.Message):
+    uid = message.from_user.id
+    gender = message.text.strip().lower()
+
+    if gender not in ["male", "female", "mixed"]:
+        await message.answer("❌ Please select: Male / Female / Mixed", reply_markup=gender_menu)
+        return
+
+    fake_sessions[uid]["gender"] = gender
+    fake_sessions[uid]["step"] = "count"
+
+    await message.answer(
+        f"✅ Gender selected: {gender.title()}\n\n📊 How many fake data entries do you want?\n💡 Suggested: 10–50\n📈 Maximum: 5000"
+    )
+
+@dp.message_handler(lambda m: m.from_user.id in fake_sessions and fake_sessions[m.from_user.id]["step"] == "count")
+async def fake_data_count(message: types.Message):
+    uid = message.from_user.id
+    txt = message.text.strip()
+
+    # সংখ্যা কিনা চেক
+    if not txt.isdigit():
+        await message.answer("❌ Please enter a valid number (digits only).")
+        return
+
+    n = int(txt)
+    if n < 1 or n > 5000:
+        await message.answer("❌ Enter between 1 and 5000.")
+        return
+
+    # সেভ করে পরের স্টেপে যাই
+    fake_sessions[uid]["count"] = n
+    fake_sessions[uid]["step"] = "fields"
+
+    # ইউজারকে কোন কোন ফিল্ড চাই জিজ্ঞেস করি
+    await message.answer(
+        "🧩 What fields do you want?\n"
+        "👉 Send a comma-separated list, e.g.\n"
+        "<code>first_name,last_name,age,city,phone,email</code>\n\n"
+        "📋 Available fields:\n"
+        "first_name, last_name, full_name, username, age, gender, "
+        "city, state, country, postal_code, address, phone, email, "
+        "job, company, uuid",
+        parse_mode="HTML"
+    )
+
+from faker import Faker
+
+@dp.message_handler(lambda m: m.from_user.id in fake_sessions and fake_sessions[m.from_user.id]["step"] == "fields")
+async def fake_data_fields(message: types.Message):
+    uid = message.from_user.id
+    fields = [f.strip().lower() for f in message.text.split(",") if f.strip()]
+    if not fields:
+        await message.answer("❌ Please enter at least one valid field.")
+        return
+
+    fake_sessions[uid]["fields"] = fields
+    fake_sessions[uid]["step"] = "done"
+
+    country = fake_sessions[uid]["country"]
+    gender = fake_sessions[uid]["gender"]
+    count = fake_sessions[uid]["count"]
+
+    faker = Faker()
+    data = []
+
+    for _ in range(count):
+        entry = {}
+        for f in fields:
+            try:
+                if f == "first_name":
+                    entry[f] = faker.first_name_male() if gender == "male" else faker.first_name_female()
+                elif f == "last_name":
+                    entry[f] = faker.last_name()
+                elif f == "full_name":
+                    fn = faker.first_name_male() if gender == "male" else faker.first_name_female()
+                    entry[f] = f"{fn} {faker.last_name()}"
+                elif hasattr(faker, f):
+                    entry[f] = str(getattr(faker, f)())
+                else:
+                    entry[f] = "N/A"
+            except Exception:
+                entry[f] = "N/A"
+        data.append(entry)
+
+    # ফলাফল মেসেজ বানানো
+    preview = "\n".join([", ".join(f"{k}: {v}" for k, v in d.items()) for d in data[:10]])
+    await message.answer(f"🎉 SUCCESS!\n✅ Generated {count} fake data entries for {country.title()}:\n\n{preview}")
+
+# বড় লিস্ট হলে টেক্সট ফাইল হিসেবে পাঠানো
+    if count > 200:
+        import io
+        output = io.StringIO()
+        for d in data:
+            line = ", ".join(f"{k}: {v}" for k, v in d.items())
+            output.write(line + "\n")
+        output.seek(0)
+        await message.answer_document(
+            types.InputFile(output, filename=f"{country.lower()}_fake_data.txt"),
+            caption=f"📄 Generated {count} fake data entries for {country.title()}!"
+        )
+        fake_sessions.pop(uid, None)
+        return
+    
+    fake_sessions.pop(uid, None)
+
+import random
+
+@dp.message(F.text == "📅 OTP Mode")
+async def otp_mode_start(message: types.Message):
+    await message.answer(
+        "🔢 Welcome to OTP Mode!\n"
+        "Please choose an OTP type:\n"
+        "1️⃣ SMS OTP (4–6 digits)\n"
+        "2️⃣ Email OTP (code with letters)\n"
+        "3️⃣ Custom Length OTP",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="SMS OTP"), KeyboardButton(text="Email OTP")],
+                [KeyboardButton(text="Custom OTP"), KeyboardButton(text="🏠 Main Menu")]
+            ],
+            resize_keyboard=True
+        )
+    )
+
+import asyncio
+from datetime import datetime, timedelta
+
+otp_sessions = {}
+
+@dp.message(lambda m: m.text in ["SMS OTP", "Email OTP", "Custom OTP"])
+async def otp_generate(message: types.Message):
+    uid = message.from_user.id
+    otp_type = message.text
+    otp = ""
+
+    if otp_type == "SMS OTP":
+        otp = str(random.randint(1000, 999999))
+    elif otp_type == "Email OTP":
+        otp = ''.join(random.choices("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", k=8))
+    elif otp_type == "Custom OTP":
+        await message.answer("✏️ Enter custom OTP length (e.g. 4–10):")
+        otp_sessions[uid] = {"step": "custom_length"}
+        return
+
+    expire = datetime.utcnow() + timedelta(minutes=1)
+    otp_sessions[uid] = {"otp": otp, "expire": expire}
+
+    await message.answer(
+        f"✅ Your {otp_type} is: <b>{otp}</b>\n"
+        f"⚠️ This OTP will expire in 1 minute!",
+        parse_mode="HTML"
+    )
+
+    await asyncio.sleep(60)
+    if uid in otp_sessions and datetime.utcnow() > otp_sessions[uid]["expire"]:
+        otp_sessions.pop(uid, None)
+        await message.answer("⌛ Your OTP has expired!")
+
+@dp.message(lambda m: m.from_user.id in otp_sessions and otp_sessions[m.from_user.id].get("step") == "custom_length")
+async def otp_custom_length(message: types.Message):
+    uid = message.from_user.id
+    if not message.text.isdigit():
+        await message.answer("❌ Please enter a valid number!")
+        return
+
+    length = int(message.text)
+    if length < 3 or length > 12:
+        await message.answer("⚠️ Length should be between 3–12!")
+        return
+
+    otp = ''.join(random.choices("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", k=length))
+    expire = datetime.utcnow() + timedelta(minutes=1)
+    otp_sessions[uid] = {"otp": otp, "expire": expire}
+
+    await message.answer(
+        f"✅ Custom OTP ({length} digits): <b>{otp}</b>\n"
+        f"⌛ This OTP will expire in 1 minute!",
+        parse_mode="HTML"
+    )
+
+    await asyncio.sleep(60)
+    if uid in otp_sessions and datetime.utcnow() > otp_sessions[uid]["expire"]:
+        otp_sessions.pop(uid, None)
+        await message.answer("⌛ Your OTP has expired!")
+
 @dp.message(F.text == "🏠 Main Menu")
 async def main_menu_back(message: types.Message):
     reset_state(message.from_user.id)
