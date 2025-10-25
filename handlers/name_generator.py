@@ -1,41 +1,39 @@
 from aiogram import Router, F
 from aiogram.types import Message
 from faker import Faker
+import time
 import re
 
 router = Router()
 
-# per-user simple state (very light)
+# User session state
 USER_STATE = {}
 
 # Supported locales
 COUNTRY_LOCALES = {
     "Norway": "no_NO",
     "United States": "en_US",
-    "Bangladesh": "en_US",
+    "Bangladesh": "en_US",  # later: custom dataset
     "India": "en_IN",
     "Germany": "de_DE",
     "France": "fr_FR",
-    "Japan": "ja_JP",
+    "Japan": "ja_JP"
 }
 
-# case-insensitive regex for country detection
-COUNTRY_PATTERN = re.compile(
-    r"^(norway|united states|bangladesh|india|germany|france|japan)$",
-    re.IGNORECASE
-)
+# Regex for detecting country
+COUNTRY_PATTERN = re.compile(r"(?i)^(norway|united states|bangladesh|india|germany|france|japan)$")
 
 @router.message(F.text == "👤 Name Generator")
 async def ng_start(message: Message):
-    txt = (
-        "🌍 **Name Generator Activated!**\n"
-        "Choose a country (type one):\n\n"
+    text = (
+        "🌍 **Name Generator Activated!**\n\n"
+        "Choose a country (type one):\n"
         "Norway, United States, Bangladesh, India, Germany, France, Japan"
     )
-    USER_STATE.pop(message.from_user.id, None)  # reset flow for this user
-    await message.answer(txt, parse_mode="Markdown")
+    USER_STATE.pop(message.from_user.id, None)
+    await message.answer(text, parse_mode="Markdown")
 
-# 1) Country
+# Step 1: Country select
 @router.message(F.text.regexp(COUNTRY_PATTERN))
 async def ng_country(message: Message):
     country = message.text.strip().title()
@@ -44,29 +42,29 @@ async def ng_country(message: Message):
         f"✅ Country selected: {country}\n\nPlease type gender:\n- Male\n- Female\n- Mixed"
     )
 
-# 2) Gender
+# Step 2: Gender select
 @router.message(F.text.regexp(r"(?i)^(male|female|mixed)$"))
 async def ng_gender(message: Message):
     uid = message.from_user.id
     if uid not in USER_STATE or "country" not in USER_STATE[uid]:
-        return  # user didn't start flow; ignore silently
+        return
     gender = message.text.strip().capitalize()
     USER_STATE[uid]["gender"] = gender
     await message.answer("📊 How many names do you want? (e.g., 10, 50, 100; max 5000)")
 
-# 3) Count and generate
+# Step 3: Name count and generate
 @router.message(F.text.regexp(r"^\d+$"))
 async def ng_generate(message: Message):
     uid = message.from_user.id
-    if uid not in USER_STATE or "country" not in USER_STATE[uid] or "gender" not in USER_STATE[uid]:
-        return  # not in flow
+    if uid not in USER_STATE or "gender" not in USER_STATE[uid]:
+        return
+
     count = int(message.text)
     if count > 5000:
         return await message.answer("❌ Maximum allowed is 5000 names.")
 
     country = USER_STATE[uid]["country"]
     gender = USER_STATE[uid]["gender"]
-
     fake = Faker(COUNTRY_LOCALES.get(country, "en_US"))
 
     names = []
@@ -78,16 +76,18 @@ async def ng_generate(message: Message):
         else:
             names.append(fake.name())
 
-    # small output inline; big output as file
-    if count <= 100:
+    # 🧩 Output Fix: ≤200 in chat, >200 as file
+    if count <= 200:
         text = f"🎉 Generated {count} {gender.lower()} names from {country}:\n\n" + "\n".join(names)
         await message.answer(text)
     else:
-        filename = f"names_{country.lower().replace(' ', '_')}_{gender.lower()}.txt"
+        safe_country = country.lower().replace(" ", "_")
+        filename = f"names_{safe_country}_{int(time.time())}.txt"
         with open(filename, "w", encoding="utf-8") as f:
             f.write("\n".join(names))
-        await message.answer_document(open(filename, "rb"),
-                                      caption=f"🎉 {count} names from {country}")
+        await message.answer_document(
+            open(filename, "rb"),
+            caption=f"✅ Generated {count} {gender.lower()} names from {country}\n📄 File ready for download!"
+        )
 
-    # done → clear state
     USER_STATE.pop(uid, None)
