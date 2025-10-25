@@ -85,9 +85,14 @@ async def ng_generate(message: Message):
         filename = f"names_{safe_country}_{int(time.time())}.txt"
         with open(filename, "w", encoding="utf-8") as f:
             f.write("\n".join(names))
-        await message.answer_document(
-            open(filename, "rb"),
-            caption=f"✅ Generated {count} {gender.lower()} names from {country}\n📄 File ready for download!"
-        )
+
+        try:
+            with open(filename, "rb") as file:
+                await message.answer_document(
+                    document=file,
+                    caption=f"✅ Generated {count} {gender.lower()} names from {country}\n📄 File ready for download!"
+                )
+        except Exception as e:
+            await message.answer(f"⚠️ File sending failed: {e}")
 
     USER_STATE.pop(uid, None)
