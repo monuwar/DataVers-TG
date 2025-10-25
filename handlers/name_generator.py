@@ -76,23 +76,25 @@ async def ng_generate(message: Message):
         else:
             names.append(fake.name())
 
-    # 🧩 Output Fix: ≤200 in chat, >200 as file
-    if count <= 200:
-        text = f"🎉 Generated {count} {gender.lower()} names from {country}:\n\n" + "\n".join(names)
-        await message.answer(text)
-    else:
-        safe_country = country.lower().replace(" ", "_")
-        filename = f"names_{safe_country}_{int(time.time())}.txt"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write("\n".join(names))
+    from aiogram.types import FSInputFile
 
-        try:
-            with open(filename, "rb") as file:
-                await message.answer_document(
-                    document=file,
-                    caption=f"✅ Generated {count} {gender.lower()} names from {country}\n📄 File ready for download!"
-                )
-        except Exception as e:
-            await message.answer(f"⚠️ File sending failed: {e}")
+# 🧩 Output Fix: ≤200 in chat, >200 as file
+if count <= 200:
+    text = f"🎉 Generated {count} {gender.lower()} names from {country}:\n\n" + "\n".join(names)
+    await message.answer(text)
+else:
+    safe_country = country.lower().replace(" ", "_")
+    filename = f"names_{safe_country}_{int(time.time())}.txt"
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write("\n".join(names))
+
+    try:
+        document = FSInputFile(filename)
+        await message.answer_document(
+            document=document,
+            caption=f"✅ Generated {count} {gender.lower()} names from {country}\n📄 File ready for download!"
+        )
+    except Exception as e:
+        await message.answer(f"⚠️ File sending failed:\n{e}")
 
     USER_STATE.pop(uid, None)
