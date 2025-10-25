@@ -1,79 +1,118 @@
-import asyncio
+from aiogram import Router, F
+from aiogram.types import Message, FSInputFile
+from faker import Faker
+import re
+import time
 import os
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup
-from aiogram.enums import ParseMode
 
-# ========== BOT SETUP ==========
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise ValueError("❌ BOT_TOKEN is missing in environment variables!")
+router = Router()
 
-bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
-dp = Dispatcher()
+# ===== USER SESSION =====
+USER_STATE = {}
 
-# ========== IMPORT HANDLERS ==========
-from handlers import name_generator
-dp.include_router(name_generator.router)
+# ===== SUPPORTED LOCALES =====
+COUNTRY_LOCALES = {
+    "Norway": "no_NO",
+    "United States": "en_US",
+    "Bangladesh": "en_US",  # placeholder — later custom dataset
+    "India": "en_IN",
+    "Germany": "de_DE",
+    "France": "fr_FR",
+    "Japan": "ja_JP"
+}
 
-# ========== MAIN MENU ==========
-def main_menu():
-    buttons = [
-        [KeyboardButton(text="🧠 Name Generator"), KeyboardButton(text="📧 Email Generator")],
-        [KeyboardButton(text="🔢 OTP Mode"), KeyboardButton(text="🧩 Fake Data")],
-        [KeyboardButton(text="➕ Plus Add"), KeyboardButton(text="🏠 Main Menu")]
-    ]
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+# ===== COUNTRY DETECTION REGEX =====
+COUNTRY_PATTERN = re.compile(r"(?i)^(norway|united states|bangladesh|india|germany|france|japan)$")
 
-# ========== /start ==========
-@dp.message(F.text == "/start")
-async def start_command(message: Message):
-    txt = (
-        "👋 <b>Welcome to DataVers TG!</b>\n\n"
-        "✨ Generate data, names, and more right from Telegram!\n\n"
-        "Choose a tool below 👇"
+# ===== 1️⃣ START COMMAND =====
+@router.message(F.text.regexp(r"(?i)(name\s*generator)"))
+async def ng_start(message: Message):
+    text = (
+        "🌐 <b>Name Generator Activated!</b>\n\n"
+        "Choose a country (type one):\n"
+        "Norway, United States, Bangladesh, India, Germany, France, Japan"
     )
-    await message.answer(txt, reply_markup=main_menu())
+    USER_STATE.pop(message.from_user.id, None)
+    await message.answer(text, parse_mode="HTML")
 
-# ========== NAME GENERATOR BUTTON ==========
-@dp.message(F.text.regexp(r"(?i)(name\s*generator)"))
-async def open_name_generator(message: Message):
-    await name_generator.ng_start(message)
+# ===== 2️⃣ COUNTRY SELECTION =====
+@router.message(F.text.regexp(COUNTRY_PATTERN))
+async def ng_country(message: Message):
+    country = message.text.strip().title()
+    USER_STATE[message.from_user.id] = {"country": country}
+    await message.answer(
+        f"✅ Country selected: <b>{country}</b>\n\n"
+        "Please type gender:\n"
+        "- Male\n"
+        "- Female\n"
+        "- Mixed",
+        parse_mode="HTML"
+    )
 
-# ========== EMAIL GENERATOR ==========
-@dp.message(F.text == "📧 Email Generator")
-async def email_gen(message: Message):
-    await message.answer("📨 Email Generator — coming soon!")
+# ===== 3️⃣ GENDER SELECTION =====
+@router.message(F.text.regexp(r"(?i)^(male|female|mixed)$"))
+async def ng_gender(message: Message):
+    uid = message.from_user.id
+    if uid not in USER_STATE or "country" not in USER_STATE[uid]:
+        return
+    gender = message.text.strip().capitalize()
+    USER_STATE[uid]["gender"] = gender
+    await message.answer("📊 How many names do you want? (e.g., 10, 50, 100; max 5000)")
 
-# ========== OTP MODE ==========
-@dp.message(F.text == "🔢 OTP Mode")
-async def otp_mode(message: Message):
-    await message.answer("🔒 OTP Mode — coming soon!")
+# ===== 4️⃣ GENERATE NAMES =====
+@router.message(F.text.regexp(r"^\d+$"))
+async def ng_generate(message: Message):
+    uid = message.from_user.id
+    if uid not in USER_STATE or "gender" not in USER_STATE[uid]:
+        return
 
-# ========== FAKE DATA ==========
-@dp.message(F.text == "🧩 Fake Data")
-async def fake_data(message: Message):
-    await message.answer("🧩 Fake Data — coming soon!")
+    count = int(message.text)
+    if count > 5000:
+        await message.answer("❌ Maximum allowed is 5000 names.")
+        return
 
-# ========== PLUS ADD ==========
-@dp.message(F.text == "➕ Plus Add")
-async def plus_add(message: Message):
-    await message.answer("➕ Plus Add — phone extract/format/export coming soon!")
+    country = USER_STATE[uid]["country"]
+    gender = USER_STATE[uid]["gender"]
+    locale = COUNTRY_LOCALES.get(country, "en_US")
+    fake = Faker(locale)
 
-# ========== MAIN MENU ==========
-@dp.message(F.text == "🏠 Main Menu")
-async def back_main(message: Message):
-    await message.answer("🏠 Back to main menu!", reply_markup=main_menu())
+    names = []
+    for _ in range(count):
+        if gender == "Male":
+            names.append(f"{fake.first_name_male()} {fake.last_name()}")
+        elif gender == "Female":
+            names.append(f"{fake.first_name_female()} {fake.last_name()}")
+        else:
+            names.append(fake.name())
 
-# ========== FALLBACK ==========
-@dp.message()
-async def fallback(message: Message):
-    await message.answer("❓ Please choose an option from the menu.", reply_markup=main_menu())
+    # ===== 5️⃣ OUTPUT HANDLING =====
+    if count <= 200:
+        text = (
+            f"🎉 <b>Generated {count} {gender.lower()} names from {country}:</b>\n\n"
+            + "\n".join(names)
+        )
+        await message.answer(text, parse_mode="HTML")
+    else:
+        safe_country = country.lower().replace(" ", "_")
+        filename = f"names_{safe_country}_{int(time.time())}.txt"
 
-# ========== RUN BOT ==========
-async def main():
-    print("🚀 DataVers TG Bot is running...")
-    await dp.start_polling(bot)
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write("\n".join(names))
 
-if __name__ == "__main__":
-    asyncio.run(main())
+        try:
+            document = FSInputFile(filename)
+            await message.answer_document(
+                document=document,
+                caption=(
+                    f"✅ Generated {count} {gender.lower()} names from {country}\n"
+                    "📄 File ready for download!"
+                ),
+            )
+        except Exception as e:
+            await message.answer(f"⚠️ File sending failed:\n{e}")
+        finally:
+            if os.path.exists(filename):
+                os.remove(filename)
+
+    # ===== 6️⃣ CLEAR USER SESSION =====
+    USER_STATE.pop(uid, None)
