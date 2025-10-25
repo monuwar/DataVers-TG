@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
-
+from handlers import name_generator
 # Read BOT_TOKEN from environment (set in Railway)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
@@ -12,7 +12,7 @@ if not BOT_TOKEN:
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-
+dp.include_router(name_generator.router)
 # --- Main Menu Buttons ---
 row1 = [KeyboardButton(text="🔐 OTP Mode"), KeyboardButton(text="➕ Plus Add")]
 row2 = [KeyboardButton(text="📋 Easy Copy"), KeyboardButton(text="📧 Email Generator")]
