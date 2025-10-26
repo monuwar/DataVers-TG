@@ -62,9 +62,7 @@ def load_names(country: str, gender: str):
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message):
     reset_state(message.from_user.id)
-    await message.answer("👋 <b>Welcome to DataVers TG Bot!</b>
-
-Choose an option below 👇", reply_markup=main_menu)
+    await message.answer("👋 <b>Welcome to DataVers TG Bot!</b>\n\nChoose an option below 👇", reply_markup=main_menu)
 
 # ---------------- MAIN BUTTONS ----------------
 @dp.message(F.text.in_(["📧 Email Generator", "📅 OTP Mode", "➕ Plus Add"]))
