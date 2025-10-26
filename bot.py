@@ -3,10 +3,10 @@ import random
 import asyncio
 import logging
 
-# auto create name dataset if missing (kept as-is; harmless if present)
+# ---------- Setup ----------
 try:
     if not os.path.exists("names"):
-        import name_dataset_builder  # noqa: F401
+        import name_dataset_builder  # noqa
 except Exception:
     pass
 
@@ -15,11 +15,12 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import CommandStart
+from faker import Faker
 
 # ---------- Logging ----------
 logging.basicConfig(level=logging.INFO)
 
-# ---------- BOT SETUP ----------
+# ---------- Bot Setup ----------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN environment variable missing!")
@@ -27,7 +28,7 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# ---------- MAIN MENU ----------
+# ---------- UI ----------
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="🧠 Name Generator"), KeyboardButton(text="📧 Email Generator")],
@@ -45,7 +46,7 @@ gender_menu = ReplyKeyboardMarkup(
     resize_keyboard=True,
 )
 
-# ---------- USER CONTEXT ----------
+# ---------- Context ----------
 user_state = {}
 fake_sessions = {}
 
@@ -53,15 +54,11 @@ def reset_state(uid: int):
     user_state.pop(uid, None)
     fake_sessions.pop(uid, None)
 
-# ---------- FILE LOADER (names) ----------
+# ---------- Name Loader ----------
 def load_names(country: str, gender: str):
-    """Load names from one combined file per country-gender (First+Last same file)."""
     base = country.lower().replace(" ", "_")
     g = gender.lower()
-    paths = [
-        f"names/{base}_{g}.txt",
-        f"names/{base}.txt",  # fallback
-    ]
+    paths = [f"names/{base}_{g}.txt", f"names/{base}.txt"]
     for path in paths:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
@@ -74,21 +71,20 @@ async def start_cmd(message: types.Message):
     reset_state(message.from_user.id)
     await message.answer("👋 Welcome to <b>DataVers TG Bot!</b>\n\nChoose an option below 👇", reply_markup=main_menu)
 
-# ---------- Placeholder buttons (as-is) ----------
+# ---------- Placeholder Buttons ----------
 @dp.message(lambda m: m.text in ("📧 Email Generator", "🗓️ OTP Mode", "➕ Plus Add"))
 async def other_features(message: types.Message):
     reset_state(message.from_user.id)
     await message.answer("🛠️ This feature is coming soon... stay tuned!")
 
-# ---------- Main Menu ----------
 @dp.message(lambda m: m.text == "🏠 Main Menu")
 async def main_menu_back(message: types.Message):
     reset_state(message.from_user.id)
     await message.answer("🏠 Main Menu:\nSelect an option 👇", reply_markup=main_menu)
 
-# ===========================
-#        FAKE DATA FLOW
-# ===========================
+# ===================================================
+#                FAKE DATA GENERATOR (AUTO)
+# ===================================================
 @dp.message(lambda m: m.text == "🧩 Fake Data")
 async def fake_data_start(message: types.Message):
     uid = message.from_user.id
@@ -125,31 +121,13 @@ async def fake_data_count(message: types.Message):
     if n < 1 or n > 5000:
         await message.answer("❌ Enter between 1 and 5000.")
         return
-    fake_sessions[uid]["count"] = n
-    fake_sessions[uid]["step"] = "fields"
-    await message.answer(
-        "🧩 What fields do you want?\n👉 Send a comma-separated list, e.g. <code>first_name,last_name,age,city,phone,email</code>\n\n"
-        "📋 Available fields:\n"
-        "first_name, last_name, full_name, username, age, gender, city, state, country, postal_code, address, phone, email, job, company, uuid",
-        parse_mode="HTML"
-    )
 
-from faker import Faker
-
-@dp.message(lambda m: m.from_user.id in fake_sessions and fake_sessions[m.from_user.id].get("step") == "fields")
-async def fake_data_fields(message: types.Message):
-    uid = message.from_user.id
-    fields = [f.strip().lower() for f in message.text.split(",") if f.strip()]
-    if not fields:
-        await message.answer("❌ Please enter at least one valid field.")
-        return
-
-    fake_sessions[uid]["fields"] = fields
-    fake_sessions[uid]["step"] = "done"
+    # Default auto fields
+    fields = ["full_name", "age", "gender", "city", "country", "email", "phone", "job", "company"]
 
     country = fake_sessions[uid]["country"]
     gender = fake_sessions[uid]["gender"]
-    count = fake_sessions[uid]["count"]
+    count = n
 
     faker = Faker()
     data = []
@@ -158,64 +136,41 @@ async def fake_data_fields(message: types.Message):
         entry = {}
         for f in fields:
             try:
-                if f == "first_name":
-                    entry[f] = faker.first_name_male() if gender == "male" else faker.first_name_female() if gender == "female" else faker.first_name()
-                elif f == "last_name":
-                    entry[f] = faker.last_name()
-                elif f == "full_name":
+                if f == "full_name":
                     fn = faker.first_name_male() if gender == "male" else faker.first_name_female() if gender == "female" else faker.first_name()
                     entry[f] = f"{fn} {faker.last_name()}"
-                elif f == "username":
-                    entry[f] = faker.user_name()
                 elif f == "age":
                     entry[f] = str(random.randint(18, 65))
                 elif f == "gender":
                     entry[f] = gender.title() if gender in ("male", "female") else random.choice(["Male", "Female"])
                 elif f == "city":
                     entry[f] = faker.city()
-                elif f == "state":
-                    entry[f] = faker.state()
                 elif f == "country":
                     entry[f] = country.title()
-                elif f == "postal_code":
-                    entry[f] = faker.postcode()
-                elif f == "address":
-                    entry[f] = faker.address().replace("\n", ", ")
-                elif f == "phone":
-                    entry[f] = faker.phone_number()
                 elif f == "email":
                     entry[f] = faker.email()
+                elif f == "phone":
+                    entry[f] = faker.phone_number()
                 elif f == "job":
                     entry[f] = faker.job()
                 elif f == "company":
                     entry[f] = faker.company()
-                elif f == "uuid":
-                    entry[f] = faker.uuid4()
                 else:
-                    # unknown field name -> keep as empty/N/A
                     entry[f] = "N/A"
             except Exception:
                 entry[f] = "N/A"
         data.append(entry)
 
-    # Small preview for chat
-    preview_lines = []
-    show = min(10, len(data))
-    for i in range(show):
-        d = data[i]
-        selected = [f"{k}: {v}" for k, v in d.items()]
-        preview_lines.append(" • " + ", ".join(selected))
-    preview = "\n".join(preview_lines)
+    # Preview
+    preview = "\n".join([f"• {d['full_name']} ({d['age']} yrs, {d['gender']}) - {d['city']}, {d['country']} | {d['email']} | {d['phone']} | {d['job']} @ {d['company']}" for d in data[:10]])
 
     await message.answer(f"🎉 SUCCESS!\n✅ Generated {count} fake data entries for {country.title()}:\n\n{preview}")
 
-    # If big – also attach as txt
     if count > 200:
         import io
         output = io.StringIO()
         for d in data:
-            line = ", ".join([f"{k}: {v}" for k, v in d.items()])
-            output.write(line + "\n")
+            output.write(", ".join([f"{k}: {v}" for k, v in d.items()]) + "\n")
         output.seek(0)
         await message.answer_document(
             types.InputFile(output, filename=f"{country.lower()}_fake_data.txt"),
@@ -224,9 +179,9 @@ async def fake_data_fields(message: types.Message):
 
     fake_sessions.pop(uid, None)
 
-# ===========================
-#       NAME GENERATOR
-# ===========================
+# ===================================================
+#                 NAME GENERATOR
+# ===================================================
 @dp.message(lambda m: m.text == "🧠 Name Generator")
 async def ask_country(message: types.Message):
     reset_state(message.from_user.id)
@@ -263,29 +218,24 @@ async def got_count(message: types.Message):
     country = user_state[uid]["country"]
     gender = user_state[uid]["gender"]
 
-    # load names list
     names_list = load_names(country, gender)
     if not names_list:
         base = country.lower().replace(" ", "_")
-        await message.answer(
-            f"❌ No name data found for {country.title()} ({gender}).\n📄 Expected file: names/{base}_{gender}.txt or names/{base}.txt"
-        )
+        await message.answer(f"❌ No name data found for {country.title()} ({gender}).\n📄 Expected: names/{base}_{gender}.txt or names/{base}.txt")
         reset_state(uid)
         return
 
-    # sample names
     if count > len(names_list):
         random.shuffle(names_list)
         result = names_list
     else:
         result = random.sample(names_list, count)
 
-    # show in chat
     block = "\n".join(result)
     await message.answer(f"🎉 SUCCESS!\n✅ Generated {count} {gender.title()} names from {country.title()}:\n\n{block}")
     reset_state(uid)
 
-# ---------- RUN ----------
+# ---------- Run ----------
 async def main():
     logging.info("DataVers TG Bot is running...")
     await dp.start_polling(bot)
