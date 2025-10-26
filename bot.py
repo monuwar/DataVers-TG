@@ -2,243 +2,180 @@ import os
 import random
 import asyncio
 import logging
-
-# ---------- Setup ----------
-try:
-    if not os.path.exists("names"):
-        import name_dataset_builder  # noqa
-except Exception:
-    pass
-
-from aiogram import Bot, Dispatcher, types
+from faker import Faker
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import CommandStart
-from faker import Faker
 
-# ---------- Logging ----------
 logging.basicConfig(level=logging.INFO)
 
-# ---------- Bot Setup ----------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN environment variable missing!")
+    raise RuntimeError("BOT_TOKEN missing!")
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
+faker = Faker()
 
-# ---------- UI ----------
-main_menu = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="🧠 Name Generator"), KeyboardButton(text="📧 Email Generator")],
-        [KeyboardButton(text="🗓️ OTP Mode"), KeyboardButton(text="🧩 Fake Data")],
-        [KeyboardButton(text="➕ Plus Add"), KeyboardButton(text="🏠 Main Menu")],
-    ],
-    resize_keyboard=True,
-)
+# ---------- MAIN INLINE MENU ----------
+def main_menu():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🧠 Name Generator", callback_data="menu_name"),
+         InlineKeyboardButton(text="🧩 Fake Data", callback_data="menu_fake")],
+        [InlineKeyboardButton(text="📧 Email Generator", callback_data="menu_email"),
+         InlineKeyboardButton(text="🔢 OTP Mode", callback_data="menu_otp")],
+    ])
 
-gender_menu = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="Male"), KeyboardButton(text="Female")],
-        [KeyboardButton(text="Mixed"), KeyboardButton(text="🏠 Main Menu")],
-    ],
-    resize_keyboard=True,
-)
-
-# ---------- Context ----------
-user_state = {}
-fake_sessions = {}
-
-def reset_state(uid: int):
-    user_state.pop(uid, None)
-    fake_sessions.pop(uid, None)
-
-# ---------- Name Loader ----------
-def load_names(country: str, gender: str):
-    base = country.lower().replace(" ", "_")
-    g = gender.lower()
-    paths = [f"names/{base}_{g}.txt", f"names/{base}.txt"]
-    for path in paths:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return [ln.strip() for ln in f if ln.strip()]
-    return []
-
-# ---------- /start ----------
+# ---------- START COMMAND ----------
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message):
-    reset_state(message.from_user.id)
-    await message.answer("👋 Welcome to <b>DataVers TG Bot!</b>\n\nChoose an option below 👇", reply_markup=main_menu)
+    await message.answer(
+        "👋 <b>Welcome to DataVers TG Bot!</b>\n\nChoose an option below 👇",
+        reply_markup=main_menu()
+    )
 
-# ---------- Placeholder Buttons ----------
-@dp.message(lambda m: m.text in ("📧 Email Generator", "🗓️ OTP Mode", "➕ Plus Add"))
-async def other_features(message: types.Message):
-    reset_state(message.from_user.id)
-    await message.answer("🛠️ This feature is coming soon... stay tuned!")
+# ---------- MAIN MENU CALLBACK ----------
+@dp.callback_query(F.data == "home")
+async def go_home(cb: types.CallbackQuery):
+    await cb.message.edit_text(
+        "🏠 <b>Main Menu</b>\nSelect an option 👇",
+        reply_markup=main_menu()
+    )
+    await cb.answer()
 
-@dp.message(lambda m: m.text == "🏠 Main Menu")
-async def main_menu_back(message: types.Message):
-    reset_state(message.from_user.id)
-    await message.answer("🏠 Main Menu:\nSelect an option 👇", reply_markup=main_menu)
+# ========== 🧠 NAME GENERATOR ==========
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-# ===================================================
-#                FAKE DATA GENERATOR (AUTO)
-# ===================================================
-@dp.message(lambda m: m.text == "🧩 Fake Data")
-async def fake_data_start(message: types.Message):
-    uid = message.from_user.id
-    fake_sessions[uid] = {"step": "country", "country": ""}
-    await message.answer("🌍 Please type a country name (e.g. Bangladesh, Japan, USA)")
+def gender_menu(prefix):
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="♂️ Male", callback_data=f"{prefix}_male"),
+        InlineKeyboardButton(text="♀️ Female", callback_data=f"{prefix}_female"),
+        InlineKeyboardButton(text="⚧️ Mixed", callback_data=f"{prefix}_mixed")
+    )
+    kb.row(InlineKeyboardButton(text="🏠 Main Menu", callback_data="home"))
+    return kb.as_markup()
 
-@dp.message(lambda m: m.from_user.id in fake_sessions and fake_sessions[m.from_user.id].get("step") == "country")
-async def fake_data_country(message: types.Message):
-    uid = message.from_user.id
-    country = message.text.strip()
-    fake_sessions[uid]["country"] = country
-    fake_sessions[uid]["step"] = "gender"
-    await message.answer(f"✅ Country selected: {country.title()}\n\nPlease select a gender:", reply_markup=gender_menu)
+@dp.callback_query(F.data == "menu_name")
+async def name_start(cb: types.CallbackQuery):
+    await cb.message.edit_text("🌍 Type a country name (e.g. Bangladesh, India, Japan):")
+    dp["state"] = {"mode": "name_country"}
+    await cb.answer()
 
-@dp.message(lambda m: m.from_user.id in fake_sessions and fake_sessions[m.from_user.id].get("step") == "gender")
-async def fake_data_gender(message: types.Message):
-    uid = message.from_user.id
-    gender = message.text.strip().lower()
-    if gender not in ["male", "female", "mixed"]:
-        await message.answer("❌ Please select: Male / Female / Mixed", reply_markup=gender_menu)
-        return
-    fake_sessions[uid]["gender"] = gender
-    fake_sessions[uid]["step"] = "count"
-    await message.answer(f"🟢 Gender selected: {gender.title()}\n\n📊 How many fake data entries do you want?\n💡 Suggested: 10–50\n📈 Maximum: 5000\n\nPlease enter a number:")
+@dp.message(lambda m: dp.get("state", {}).get("mode") == "name_country")
+async def name_country(msg: types.Message):
+    dp["state"] = {"mode": "name_gender", "country": msg.text.strip()}
+    await msg.answer(f"✅ Country selected: {msg.text.title()}\n\nSelect gender:", reply_markup=gender_menu("name"))
 
-@dp.message(lambda m: m.from_user.id in fake_sessions and fake_sessions[m.from_user.id].get("step") == "count")
-async def fake_data_count(message: types.Message):
-    uid = message.from_user.id
-    txt = message.text.strip()
-    if not txt.isdigit():
-        await message.answer("❌ Please enter a valid number (digits only).")
-        return
-    n = int(txt)
-    if n < 1 or n > 5000:
-        await message.answer("❌ Enter between 1 and 5000.")
-        return
-
-    # Default auto fields
-    fields = ["full_name", "age", "gender", "city", "country", "email", "phone", "job", "company"]
-
-    country = fake_sessions[uid]["country"]
-    gender = fake_sessions[uid]["gender"]
-    count = n
-
-    faker = Faker()
-    data = []
-
+@dp.callback_query(F.data.startswith("name_"))
+async def name_gender(cb: types.CallbackQuery):
+    gender = cb.data.split("_")[1]
+    country = dp.get("state", {}).get("country", "Unknown")
+    count = 10
+    names = []
     for _ in range(count):
-        entry = {}
-        for f in fields:
-            try:
-                if f == "full_name":
-                    fn = faker.first_name_male() if gender == "male" else faker.first_name_female() if gender == "female" else faker.first_name()
-                    entry[f] = f"{fn} {faker.last_name()}"
-                elif f == "age":
-                    entry[f] = str(random.randint(18, 65))
-                elif f == "gender":
-                    entry[f] = gender.title() if gender in ("male", "female") else random.choice(["Male", "Female"])
-                elif f == "city":
-                    entry[f] = faker.city()
-                elif f == "country":
-                    entry[f] = country.title()
-                elif f == "email":
-                    entry[f] = faker.email()
-                elif f == "phone":
-                    entry[f] = faker.phone_number()
-                elif f == "job":
-                    entry[f] = faker.job()
-                elif f == "company":
-                    entry[f] = faker.company()
-                else:
-                    entry[f] = "N/A"
-            except Exception:
-                entry[f] = "N/A"
-        data.append(entry)
+        if gender == "male":
+            names.append(faker.first_name_male())
+        elif gender == "female":
+            names.append(faker.first_name_female())
+        else:
+            names.append(faker.first_name())
+    result = "\n".join(names)
+    await cb.message.edit_text(
+        f"🎉 <b>{count} {gender.title()} Names</b> from {country.title()}:\n\n{result}",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton("🏠 Main Menu", callback_data="home")]])
+    )
+    dp["state"] = {}
+    await cb.answer()
 
-    # Preview
-    preview = "\n".join([f"• {d['full_name']} ({d['age']} yrs, {d['gender']}) - {d['city']}, {d['country']} | {d['email']} | {d['phone']} | {d['job']} @ {d['company']}" for d in data[:10]])
+# ========== 🧩 FAKE DATA GENERATOR ==========
+def fake_gender_menu():
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="♂️ Male", callback_data="fake_male"),
+        InlineKeyboardButton(text="♀️ Female", callback_data="fake_female"),
+        InlineKeyboardButton(text="⚧️ Mixed", callback_data="fake_mixed")
+    )
+    kb.row(InlineKeyboardButton(text="🏠 Main Menu", callback_data="home"))
+    return kb.as_markup()
 
-    await message.answer(f"🎉 SUCCESS!\n✅ Generated {count} fake data entries for {country.title()}:\n\n{preview}")
+@dp.callback_query(F.data == "menu_fake")
+async def fake_start(cb: types.CallbackQuery):
+    dp["state"] = {"mode": "fake_country"}
+    await cb.message.edit_text("🌍 Type a country name for fake data:")
+    await cb.answer()
 
-    if count > 200:
-        import io
-        output = io.StringIO()
-        for d in data:
-            output.write(", ".join([f"{k}: {v}" for k, v in d.items()]) + "\n")
-        output.seek(0)
-        await message.answer_document(
-            types.InputFile(output, filename=f"{country.lower()}_fake_data.txt"),
-            caption=f"📄 Generated {count} fake data entries for {country.title()}!"
+@dp.message(lambda m: dp.get("state", {}).get("mode") == "fake_country")
+async def fake_country(msg: types.Message):
+    dp["state"] = {"mode": "fake_gender", "country": msg.text.strip()}
+    await msg.answer(f"✅ Country: {msg.text.title()}\nSelect gender:", reply_markup=fake_gender_menu())
+
+@dp.callback_query(F.data.startswith("fake_"))
+async def fake_gender(cb: types.CallbackQuery):
+    gender = cb.data.split("_")[1]
+    country = dp.get("state", {}).get("country", "Unknown")
+    profiles = []
+    for _ in range(5):
+        fn = faker.first_name_male() if gender == "male" else faker.first_name_female() if gender == "female" else faker.first_name()
+        ln = faker.last_name()
+        profiles.append(
+            f"👤 {fn} {ln}\n📧 {faker.email()}\n📞 {faker.phone_number()}\n🏙️ {faker.city()}, {country.title()}\n💼 {faker.job()}"
         )
+    text = "\n\n".join(profiles)
+    await cb.message.edit_text(
+        f"🎉 <b>Generated 5 {gender.title()} Fake Profiles</b> for {country.title()}:\n\n{text}",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton("🏠 Main Menu", callback_data="home")]])
+    )
+    dp["state"] = {}
+    await cb.answer()
 
-    fake_sessions.pop(uid, None)
+# ========== 🏠 NAVIGATION (Already linked to Main Menu) ==========
+# "home" callback already handled above.
 
-# ===================================================
-#                 NAME GENERATOR
-# ===================================================
-@dp.message(lambda m: m.text == "🧠 Name Generator")
-async def ask_country(message: types.Message):
-    reset_state(message.from_user.id)
-    user_state[message.from_user.id] = {"step": "country"}
-    await message.answer("🌍 Type a country name (e.g. Bangladesh, India, Japan, USA)")
+# ========== 📧 EMAIL GENERATOR ==========
+@dp.callback_query(F.data == "menu_email")
+async def email_gen(cb: types.CallbackQuery):
+    emails = []
+    for _ in range(10):
+        fn = faker.first_name().lower()
+        ln = faker.last_name().lower()
+        domain = random.choice(["gmail.com", "yahoo.com", "outlook.com", "proton.me"])
+        emails.append(f"{fn}.{ln}@{domain}")
+    result = "\n".join(emails)
+    await cb.message.edit_text(
+        f"📧 <b>Sample Email Addresses</b>:\n\n{result}",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton("🏠 Main Menu", callback_data="home")]]
+        )
+    )
+    await cb.answer()
 
-@dp.message(lambda m: user_state.get(m.from_user.id, {}).get("step") == "country")
-async def got_country(message: types.Message):
-    country = message.text.strip()
-    user_state[message.from_user.id] = {"step": "gender", "country": country}
-    await message.answer(f"✅ Country selected: {country.title()}\n\nPlease select a gender:", reply_markup=gender_menu)
+# ========== 🔢 OTP MODE ==========
+@dp.callback_query(F.data == "menu_otp")
+async def otp_mode(cb: types.CallbackQuery):
+    otp = random.randint(100000, 999999)
+    await cb.message.edit_text(
+        f"🔢 <b>Generated OTP:</b> <code>{otp}</code>\n⌛ Valid for 1 minute!",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton("🏠 Main Menu", callback_data="home")]]
+        )
+    )
+    await cb.answer()
+    await asyncio.sleep(60)
+    try:
+        await cb.message.edit_text("⌛ OTP Expired! ⚠️", reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton("🏠 Main Menu", callback_data="home")]]
+        ))
+    except Exception:
+        pass
 
-@dp.message(lambda m: user_state.get(m.from_user.id, {}).get("step") == "gender")
-async def got_gender(message: types.Message):
-    g = message.text.strip().lower()
-    if g not in ["male", "female", "mixed"]:
-        await message.answer("❌ Please select: Male / Female / Mixed", reply_markup=gender_menu)
-        return
-    user_state[message.from_user.id]["gender"] = g
-    user_state[message.from_user.id]["step"] = "count"
-    await message.answer(f"🟢 Gender selected: {g.title()}\n\n📊 How many names do you want?\n💡 Suggested: 10–50\n📈 Maximum: 5000\n\nPlease enter a number:")
-
-@dp.message(lambda m: user_state.get(m.from_user.id, {}).get("step") == "count")
-async def got_count(message: types.Message):
-    uid = message.from_user.id
-    if not message.text.isdigit():
-        await message.answer("❌ Please enter a valid number.")
-        return
-    count = int(message.text)
-    if count < 1 or count > 5000:
-        await message.answer("❌ Enter between 1 and 5000.")
-        return
-
-    country = user_state[uid]["country"]
-    gender = user_state[uid]["gender"]
-
-    names_list = load_names(country, gender)
-    if not names_list:
-        base = country.lower().replace(" ", "_")
-        await message.answer(f"❌ No name data found for {country.title()} ({gender}).\n📄 Expected: names/{base}_{gender}.txt or names/{base}.txt")
-        reset_state(uid)
-        return
-
-    if count > len(names_list):
-        random.shuffle(names_list)
-        result = names_list
-    else:
-        result = random.sample(names_list, count)
-
-    block = "\n".join(result)
-    await message.answer(f"🎉 SUCCESS!\n✅ Generated {count} {gender.title()} names from {country.title()}:\n\n{block}")
-    reset_state(uid)
-
-# ---------- Run ----------
+# ========== 🚀 RUN BOT ==========
 async def main():
-    logging.info("DataVers TG Bot is running...")
+    print("🚀 DataVers TG Inline Bot is running...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
+
