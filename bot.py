@@ -193,8 +193,7 @@ async def get_count(message: types.Message):
     selected = names[:count]
 
     if count <= 200:
-        await message.answer(f"🎉 SUCCESS!
-✅ Generated {count} {gender.title()} names from {country.title()}:
+        await message.answer(f"🎉 SUCCESS!\n✅ Generated {count} fake data entries for {country.title()}:\n\n{preview}")
 
 " + "\n".join(selected))
     else:
