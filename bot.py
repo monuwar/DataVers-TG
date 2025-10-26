@@ -133,10 +133,7 @@ async def fake_data_count(message: types.Message):
     # Output
     if n <= 200:
         preview = "\n".join([f"{d['full_name']} — {d['email']} — {d['city']} ({d['country']})" for d in data])
-        await message.answer(f"🎉 SUCCESS!
-✅ Generated {n} fake data entries from {country.title()}:
-
-{preview}")
+        await message.answer(f"🎉 SUCCESS!\n✅ Generated {count} fake data entries for {country.title()}:\n\n{preview}")
     else:
         import io
         output = io.StringIO()
