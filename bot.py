@@ -94,14 +94,7 @@ async def fake_data_gender(message: types.Message):
         return
     fake_sessions[uid]["gender"] = gender
     fake_sessions[uid]["step"] = "count"
-    await message.answer(f"✅ Gender selected: {gender.title()}
-
-📊 How many fake data entries do you want?
-💡 Suggested: 10–50
-📈 Maximum: 5000
-
-Please enter a number:")
-
+    await message.answer(f"✅ Gender selected: {gender.title()}\nHow many fake data entries do you want?\n💡 Suggested: 10–50\n📈 Maximum: 5000\n\nPlease enter a number:")
 @dp.message(lambda m: m.from_user.id in fake_sessions and fake_sessions[m.from_user.id]["step"] == "count")
 async def fake_data_count(message: types.Message):
     uid = message.from_user.id
