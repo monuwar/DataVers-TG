@@ -1,73 +1,70 @@
 import os
 import random
 import asyncio
-import logging
-from faker import Faker
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.filters import CommandStart
-
-logging.basicConfig(level=logging.INFO)
+from faker import Faker
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN missing!")
+    raise RuntimeError("❌ BOT_TOKEN environment variable missing!")
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 faker = Faker()
+dp["state"] = {}
 
-# ---------- MAIN INLINE MENU ----------
+# ---------- INLINE MAIN MENU ----------
 def main_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🧠 Name Generator", callback_data="menu_name"),
-         InlineKeyboardButton(text="🧩 Fake Data", callback_data="menu_fake")],
-        [InlineKeyboardButton(text="📧 Email Generator", callback_data="menu_email"),
-         InlineKeyboardButton(text="🔢 OTP Mode", callback_data="menu_otp")],
+        [
+            InlineKeyboardButton(text="🧠 Name Generator", callback_data="menu_name"),
+            InlineKeyboardButton(text="🧩 Fake Data", callback_data="menu_fake")
+        ],
+        [
+            InlineKeyboardButton(text="📧 Email Generator", callback_data="menu_email"),
+            InlineKeyboardButton(text="🔢 OTP Mode", callback_data="menu_otp")
+        ]
     ])
 
-# ---------- START COMMAND ----------
-@dp.message(CommandStart())
+@dp.message(F.text == "/start")
 async def start_cmd(message: types.Message):
     await message.answer(
         "👋 <b>Welcome to DataVers TG Bot!</b>\n\nChoose an option below 👇",
         reply_markup=main_menu()
     )
 
-# ---------- MAIN MENU CALLBACK ----------
 @dp.callback_query(F.data == "home")
-async def go_home(cb: types.CallbackQuery):
+async def back_home(cb: types.CallbackQuery):
     await cb.message.edit_text(
-        "🏠 <b>Main Menu</b>\nSelect an option 👇",
+        "🏠 <b>Main Menu:</b>\nSelect an option 👇",
         reply_markup=main_menu()
     )
     await cb.answer()
 
-# ========== 🧠 NAME GENERATOR ==========
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-
+# ---------- 🧠 NAME GENERATOR ----------
 def gender_menu(prefix):
-    kb = InlineKeyboardBuilder()
-    kb.row(
-        InlineKeyboardButton(text="♂️ Male", callback_data=f"{prefix}_male"),
-        InlineKeyboardButton(text="♀️ Female", callback_data=f"{prefix}_female"),
-        InlineKeyboardButton(text="⚧️ Mixed", callback_data=f"{prefix}_mixed")
-    )
-    kb.row(InlineKeyboardButton(text="🏠 Main Menu", callback_data="home"))
-    return kb.as_markup()
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="♂️ Male", callback_data=f"{prefix}_male"),
+            InlineKeyboardButton(text="♀️ Female", callback_data=f"{prefix}_female"),
+            InlineKeyboardButton(text="⚧️ Mixed", callback_data=f"{prefix}_mixed")
+        ],
+        [InlineKeyboardButton(text="🏠 Main Menu", callback_data="home")]
+    ])
 
 @dp.callback_query(F.data == "menu_name")
 async def name_start(cb: types.CallbackQuery):
-    await cb.message.edit_text("🌍 Type a country name (e.g. Bangladesh, India, Japan):")
     dp["state"] = {"mode": "name_country"}
+    await cb.message.edit_text("🌍 Type a country name (e.g. Bangladesh, India, Japan):")
     await cb.answer()
 
 @dp.message(lambda m: dp.get("state", {}).get("mode") == "name_country")
 async def name_country(msg: types.Message):
     dp["state"] = {"mode": "name_gender", "country": msg.text.strip()}
-    await msg.answer(f"✅ Country selected: {msg.text.title()}\n\nSelect gender:", reply_markup=gender_menu("name"))
+    await msg.answer(f"✅ Country selected: {msg.text.title()}\nSelect gender:", reply_markup=gender_menu("name"))
 
 @dp.callback_query(F.data.startswith("name_"))
 async def name_gender(cb: types.CallbackQuery):
@@ -90,16 +87,16 @@ async def name_gender(cb: types.CallbackQuery):
     dp["state"] = {}
     await cb.answer()
 
-# ========== 🧩 FAKE DATA GENERATOR ==========
+# ---------- 🧩 FAKE DATA ----------
 def fake_gender_menu():
-    kb = InlineKeyboardBuilder()
-    kb.row(
-        InlineKeyboardButton(text="♂️ Male", callback_data="fake_male"),
-        InlineKeyboardButton(text="♀️ Female", callback_data="fake_female"),
-        InlineKeyboardButton(text="⚧️ Mixed", callback_data="fake_mixed")
-    )
-    kb.row(InlineKeyboardButton(text="🏠 Main Menu", callback_data="home"))
-    return kb.as_markup()
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="♂️ Male", callback_data="fake_male"),
+            InlineKeyboardButton(text="♀️ Female", callback_data="fake_female"),
+            InlineKeyboardButton(text="⚧️ Mixed", callback_data="fake_mixed")
+        ],
+        [InlineKeyboardButton(text="🏠 Main Menu", callback_data="home")]
+    ])
 
 @dp.callback_query(F.data == "menu_fake")
 async def fake_start(cb: types.CallbackQuery):
@@ -110,7 +107,7 @@ async def fake_start(cb: types.CallbackQuery):
 @dp.message(lambda m: dp.get("state", {}).get("mode") == "fake_country")
 async def fake_country(msg: types.Message):
     dp["state"] = {"mode": "fake_gender", "country": msg.text.strip()}
-    await msg.answer(f"✅ Country: {msg.text.title()}\nSelect gender:", reply_markup=fake_gender_menu())
+    await msg.answer(f"✅ Country selected: {msg.text.title()}\nSelect gender:", reply_markup=fake_gender_menu())
 
 @dp.callback_query(F.data.startswith("fake_"))
 async def fake_gender(cb: types.CallbackQuery):
@@ -131,10 +128,7 @@ async def fake_gender(cb: types.CallbackQuery):
     dp["state"] = {}
     await cb.answer()
 
-# ========== 🏠 NAVIGATION (Already linked to Main Menu) ==========
-# "home" callback already handled above.
-
-# ========== 📧 EMAIL GENERATOR ==========
+# ---------- 📧 EMAIL GENERATOR ----------
 @dp.callback_query(F.data == "menu_email")
 async def email_gen(cb: types.CallbackQuery):
     emails = []
@@ -152,7 +146,7 @@ async def email_gen(cb: types.CallbackQuery):
     )
     await cb.answer()
 
-# ========== 🔢 OTP MODE ==========
+# ---------- 🔢 OTP GENERATOR ----------
 @dp.callback_query(F.data == "menu_otp")
 async def otp_mode(cb: types.CallbackQuery):
     otp = random.randint(100000, 999999)
@@ -171,11 +165,10 @@ async def otp_mode(cb: types.CallbackQuery):
     except Exception:
         pass
 
-# ========== 🚀 RUN BOT ==========
+# ---------- 🚀 RUN BOT ----------
 async def main():
     print("🚀 DataVers TG Inline Bot is running...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
