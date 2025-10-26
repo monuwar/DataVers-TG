@@ -157,10 +157,7 @@ async def get_country(message: types.Message):
     country = message.text.strip()
     user_state[uid]["country"] = country
     user_state[uid]["step"] = "gender"
-    await message.answer(f"✅ Country selected: {country.title()}
-
-Please select a gender:", reply_markup=gender_menu)
-
+    await message.answer(f"✅ Country selected: {country.title()}\nPlease select a gender:")
 @dp.message(lambda m: user_state.get(m.from_user.id, {}).get("step") == "gender")
 async def get_gender(message: types.Message):
     uid = message.from_user.id
