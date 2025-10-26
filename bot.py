@@ -167,14 +167,7 @@ async def get_gender(message: types.Message):
         return
     user_state[uid]["gender"] = g
     user_state[uid]["step"] = "count"
-    await message.answer(f"✅ Gender selected: {g.title()}
-
-📊 How many names do you want?
-💡 Suggested: 10–50
-📈 Maximum: 5000
-
-Please enter a number:")
-
+    await message.answer(f"✅ Gender selected: {g.title()}\nHow many fake data entries do you want?\n💡 Suggested: 10–50\n📈 Maximum: 5000\n\nPlease enter a number:")
 @dp.message(lambda m: user_state.get(m.from_user.id, {}).get("step") == "count")
 async def get_count(message: types.Message):
     uid = message.from_user.id
