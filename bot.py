@@ -83,9 +83,7 @@ async def fake_data_country(message: types.Message):
     country = message.text.strip()
     fake_sessions[uid]["country"] = country
     fake_sessions[uid]["step"] = "gender"
-    await message.answer(f"✅ Country selected: {country.title()}
-
-Please select a gender:", reply_markup=gender_menu)
+    await message.answer(f"✅ Country selected: {country.title()}\nPlease select a gender:", reply_markup=gender_menu)
 
 @dp.message(lambda m: m.from_user.id in fake_sessions and fake_sessions[m.from_user.id]["step"] == "gender")
 async def fake_data_gender(message: types.Message):
